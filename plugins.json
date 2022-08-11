@@ -1,0 +1,25 @@
+[
+    {
+        "iconUrl": "https://github.com/SaurabhKaperwan/CSX/raw/refs/heads/master/VegaMovies/icon.jpg",
+        "fileHash": "sha256-fded1a5a0d8b6c81cc6315acdb73a4e37ea781de8d8d4ba55c3f140c33f04058",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Akshat-Jain737/TestPlugins",
+        "fileSize": 51092,
+        "status": 1,
+        "language": "hi",
+        "authors": [
+            "Akshat-Jain737"
+        ],
+        "tvTypes": [
+            "TvSeries",
+            "Movie",
+            "AsianDrama",
+            "Anime"
+        ],
+        "version": 12,
+        "internalName": "headphone",
+        "description": "VegaMovies + RogMovies",
+        "url": "https://raw.githubusercontent.com/Akshat-Jain737/TestPlugins/builds/headphone.cs3",
+        "name": "headphone"
+    }
+]
