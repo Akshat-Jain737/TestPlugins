@@ -1,10 +1,10 @@
-version = 1
+version = 2
 
 cloudstream {
     language = "hi"
     // All of these properties are optional, you can safely remove them
 
-    description = "VegaMovies (vegamovies.lease)"
+    description = "VegaMovies + RogMovies"
     authors = listOf("Akshat-Jain737")
 
     /**

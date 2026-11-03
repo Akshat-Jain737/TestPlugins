@@ -1,0 +1,8 @@
+{
+    "name": "Movies",
+    "description": "VegaMovies and RogMovies extensions",
+    "manifestVersion": 1,
+    "pluginLists": [
+        "https://raw.githubusercontent.com/Akshat-Jain737/TestPlugins/builds/plugins.json"
+    ]
+}

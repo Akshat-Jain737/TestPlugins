@@ -8,6 +8,7 @@ import android.content.Context
 class VegaMoviesPlugin: Plugin() {
     override fun load(context: Context) {
         registerMainAPI(VegaMoviesProvider())
+        registerMainAPI(RogMoviesProvider())
         registerExtractorAPI(VCloud())
     }
 }

@@ -10,7 +10,7 @@ import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.api.Log
 import java.net.URI
 
-class VegaMoviesProvider : MainAPI() {
+open class VegaMoviesProvider : MainAPI() {
     override var mainUrl = "https://vegamovies.lease"
     override var name = "VegaMovies"
     override val hasMainPage = true
