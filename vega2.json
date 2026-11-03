@@ -1,0 +1,8 @@
+{
+    "name": "VM Direct",
+    "description": "VegaMovies extension, commit-pinned",
+    "manifestVersion": 1,
+    "pluginLists": [
+        "https://cdn.jsdelivr.net/gh/Akshat-Jain737/TestPlugins@a87c17e967389cfb3efc5188fb487c5938fe66d7/plugins.json"
+    ]
+}
