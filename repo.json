@@ -1,0 +1,8 @@
+{
+    "name": "My VegaMovies Repo",
+    "description": "Self-maintained VegaMovies extension for vegamovies.lease",
+    "manifestVersion": 1,
+    "pluginLists": [
+        "https://raw.githubusercontent.com/<Akshat-Jain737>/<TestPlugins>/builds/plugins.json"
+    ]
+}
