@@ -1,0 +1,8 @@
+{
+    "name": "Vegamovies Extensions",
+    "description": "VegaMovies extension for vegamovies",
+    "manifestVersion": 1,
+    "pluginLists": [
+        "https://cdn.jsdelivr.net/gh/Akshat-Jain737/TestPlugins@builds/plugins.json"
+    ]
+}
