@@ -5,29 +5,6 @@ import com.lagradost.cloudstream3.utils.*
 import java.net.URI
 import com.lagradost.api.Log
 
-suspend fun resolveFinalUrl(startUrl: String): String? {
-    var currentUrl = startUrl
-    var loopCount = 0
-    val maxRedirects = 7
-
-    while (loopCount < maxRedirects) {
-        try {
-            val res = app.head(currentUrl, allowRedirects = false, timeout = 2500L)
-            if (res.code == 200 || res.code in 300..399) {
-                val location = res.headers.get("Location")
-                if(location.isNullOrEmpty()) break
-                currentUrl = location
-            } else {
-                return null
-            }
-            loopCount++
-        } catch (e: Exception) {
-            return null
-        }
-    }
-    return currentUrl
-}
-
 fun getBaseUrl(url: String): String {
     try {
         return URI(url).let {
@@ -54,14 +31,22 @@ fun getIndexQuality(str: String?): Int {
     }
 }
 
+private const val DYNAMIC_URLS_JSON =
+    "https://raw.githubusercontent.com/SaurabhKaperwan/Utils/refs/heads/main/urls.json"
+
+private var dynamicUrlsCache: Map<String, String>? = null
+
 suspend fun getLatestBaseUrl(baseUrl: String, source: String): String {
-    return try {
-        val dynamicUrls = app.get("https://raw.githubusercontent.com/SaurabhKaperwan/Utils/refs/heads/main/urls.json")
-            .parsedSafe<Map<String, String>>()
-        dynamicUrls?.get(source)?.takeIf { it.isNotBlank() } ?: baseUrl
-    } catch (e: Exception) {
-        baseUrl
+    val urls = dynamicUrlsCache ?: run {
+        val fetched = try {
+            app.get(DYNAMIC_URLS_JSON, timeout = 10L).parsedSafe<Map<String, String>>().orEmpty()
+        } catch (e: Exception) {
+            emptyMap()
+        }
+        if (fetched.isNotEmpty()) dynamicUrlsCache = fetched
+        fetched
     }
+    return urls[source]?.takeIf { it.isNotBlank() } ?: baseUrl
 }
 
 open class VCloud : ExtractorApi() {
@@ -100,7 +85,7 @@ open class VCloud : ExtractorApi() {
             baseUrl = latestBaseUrl
         }
 
-        val doc = app.get(newUrl).document
+        val doc = app.get(newUrl, timeout = 10L).document
 
         var link = if(newUrl.contains("/video/")) {
             doc.selectFirst("div.vd > center > a") ?. attr("href") ?: ""
@@ -117,7 +102,7 @@ open class VCloud : ExtractorApi() {
 
         if(!link.startsWith("https://")) link = baseUrl + link
 
-        val document = app.get(link).document
+        val document = app.get(link, timeout = 10L).document
         val header = document.select("div.card-header").text()
         val size = document.select("i#size").text()
         val quality = getIndexQuality(header)
@@ -154,11 +139,6 @@ open class VCloud : ExtractorApi() {
                 val finalURL = if (pixelLink.contains("download", true)) pixelLink
                 else "$baseUrlLink/api/file/${pixelLink.substringAfterLast("/")}?download"
                 myCallback(finalURL, "[Pixeldrain]")
-            }
-            else if (text.contains("Server : 10Gbps")) {
-                var redirectUrl = resolveFinalUrl(link) ?: return@amap
-                if(redirectUrl.contains("link=")) redirectUrl = redirectUrl.substringAfter("link=")
-                myCallback(redirectUrl, "[Download]")
             }
             else if (text.contains("Gofile")) loadExtractor(link, "", subtitleCallback, callback)
             else { Log.d("Error", "No Server matched") }
