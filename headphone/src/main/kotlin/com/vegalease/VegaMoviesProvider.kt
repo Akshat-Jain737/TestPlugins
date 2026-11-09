@@ -233,6 +233,8 @@ open class VegaMoviesProvider : MainAPI() {
                 vcloudHrefRegex.find(html)?.groupValues?.get(1).orEmpty()
             }.filter { it.isNotBlank() }.map { EpisodeLink(it) }
 
+            prefetchVCloudLinks(data.take(2).map { it.source })
+
             awaitMeta()
 
             return@coroutineScope newMovieLoadResponse(title, url, TvType.Movie, data) {
