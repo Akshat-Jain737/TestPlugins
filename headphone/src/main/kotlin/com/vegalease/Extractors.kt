@@ -60,6 +60,8 @@ suspend fun getLatestBaseUrl(baseUrl: String, source: String): String {
     return urls[source]?.takeIf { it.isNotBlank() } ?: baseUrl
 }
 
+const val PLAYDRIVE_MISSING = "playdrive-missing"
+
 private const val RESOLVED_LINK_TTL_MS = 5 * 60 * 1000L
 private val resolvedLinks = ConcurrentHashMap<String, Pair<Long, List<ExtractorLink>>>()
 private val prefetchScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -107,10 +109,27 @@ suspend fun hedgedGet(url: String, hedgeAfterMs: Long = 3000L): String = corouti
 // the page. Read the key rather than hardcoding it, so a key rotation does not
 // break us — only a change of scheme would.
 suspend fun resolvePlayDrive(embedUrl: String, callback: (ExtractorLink) -> Unit) {
-    val html = try { hedgedGet(embedUrl) } catch (e: Exception) { return }
-    val key = Regex("__PA_SEAL_KEY__\\s*=\\s*\"([^\"]+)\"").find(html)?.groupValues?.get(1) ?: return
-    val sealed = Regex("\"video_url\"\\s*:\\s*\"(pa!~[^\"]+)\"").find(html)?.groupValues?.get(1) ?: return
-    val master = unseal(sealed, key)?.takeIf { it.startsWith("http") } ?: return
+    // Temporary diagnostic: surface where resolution fails as a visible entry
+    // instead of returning silently.
+    suspend fun fail(stage: String) = callback(
+        newExtractorLink("PlayDrive", "PlayDrive FAIL: $stage", embedUrl, ExtractorLinkType.VIDEO) {
+            this.quality = Qualities.Unknown.value
+        }
+    )
+
+    if (embedUrl == PLAYDRIVE_MISSING) return fail("no Watch Online link on page")
+
+    val html = try {
+        hedgedGet(embedUrl)
+    } catch (e: Exception) {
+        return fail("fetch ${e.javaClass.simpleName}")
+    }
+    val key = Regex("__PA_SEAL_KEY__\\s*=\\s*\"([^\"]+)\"").find(html)?.groupValues?.get(1)
+        ?: return fail("no seal key (${html.length}B)")
+    val sealed = Regex("\"video_url\"\\s*:\\s*\"(pa!~[^\"]+)\"").find(html)?.groupValues?.get(1)
+        ?: return fail("no video_url")
+    val master = unseal(sealed, key)?.takeIf { it.startsWith("http") }
+        ?: return fail("unseal failed")
 
     // Audio is a separate rendition group in the master, so pointing the player
     // at an individual variant would give silent video. Keep the adaptive

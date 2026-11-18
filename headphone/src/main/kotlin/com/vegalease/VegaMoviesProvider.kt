@@ -241,10 +241,9 @@ open class VegaMoviesProvider : MainAPI() {
                 val html = app.get(link, timeout = 10L).text
                 vcloudHrefRegex.find(html)?.groupValues?.get(1).orEmpty() to label
             }.filter { it.first.isNotBlank() }.map { EpisodeLink(it.first, it.second) } +
-                listOfNotNull(
+                EpisodeLink(
                     document.selectFirst("a[href*=playdrive]")?.attr("href")
-                        ?.takeIf { it.isNotBlank() }
-                        ?.let { EpisodeLink(it) }
+                        ?.takeIf { it.isNotBlank() } ?: PLAYDRIVE_MISSING
                 )
 
             prefetchVCloudLinks(data.filter { it.source.contains("vcloud") }.take(2).map { it.source })
