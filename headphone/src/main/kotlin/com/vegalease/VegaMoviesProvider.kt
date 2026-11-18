@@ -23,6 +23,7 @@ open class VegaMoviesProvider : MainAPI() {
     override val hasDownloadSupport = true
     val cinemeta_url = "https://v3-cinemeta.strem.io/meta"
     private val vcloudHrefRegex = Regex("href=\"([^\"]*vcloud[^\"]*)\"", RegexOption.IGNORE_CASE)
+    private val headingTagRegex = Regex("h[1-6]")
 
     override val supportedTypes = setOf(
         TvType.Movie,
@@ -226,14 +227,27 @@ open class VegaMoviesProvider : MainAPI() {
                 addImdbUrl(imdbUrl)
             }
         } else {
-            val buttons = document.select("a:has(button.dwd-button)")
-            val data = buttons.amap { button ->
+            // The quality sits in the heading above each button, not on the
+            // button itself (its own text is just "Download Now").
+            var heading: String? = null
+            val labelledButtons = mutableListOf<Pair<Element, String?>>()
+            document.select("h1,h2,h3,h4,h5,h6,a:has(button.dwd-button)").forEach { el ->
+                if (el.tagName().matches(headingTagRegex)) heading = el.text()
+                else labelledButtons.add(el to heading)
+            }
+
+            val data = labelledButtons.amap { (button, label) ->
                 val link = fixUrl(button.attr("href"))
                 val html = app.get(link, timeout = 10L).text
-                vcloudHrefRegex.find(html)?.groupValues?.get(1).orEmpty()
-            }.filter { it.isNotBlank() }.map { EpisodeLink(it) }
+                vcloudHrefRegex.find(html)?.groupValues?.get(1).orEmpty() to label
+            }.filter { it.first.isNotBlank() }.map { EpisodeLink(it.first, it.second) } +
+                listOfNotNull(
+                    document.selectFirst("a[href*=playdrive]")?.attr("href")
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { EpisodeLink(it) }
+                )
 
-            prefetchVCloudLinks(data.take(2).map { it.source })
+            prefetchVCloudLinks(data.filter { it.source.contains("vcloud") }.take(2).map { it.source })
 
             awaitMeta()
 
@@ -259,8 +273,11 @@ open class VegaMoviesProvider : MainAPI() {
         val sources = parseJson<ArrayList<EpisodeLink>>(data)
         sources.amap {
             val source = it.source
-            if (source.contains("vcloud")) VCloud().getUrl(source, "", subtitleCallback, callback)
-            else loadExtractor(source, "", subtitleCallback, callback)
+            when {
+                source.contains("playdrive") -> resolvePlayDrive(source, callback)
+                source.contains("vcloud") -> VCloud(it.label).getUrl(source, "", subtitleCallback, callback)
+                else -> loadExtractor(source, "", subtitleCallback, callback)
+            }
         }
         return true
     }
@@ -308,7 +325,8 @@ open class VegaMoviesProvider : MainAPI() {
     )
 
     data class EpisodeLink(
-        val source: String
+        val source: String,
+        val label: String? = null
     )
 
     data class VegaSearchResponse(

@@ -84,7 +84,7 @@ fun prefetchVCloudLinks(sources: List<String>) {
 // vcloud responds anywhere from 0.5s to 30s for identical content, so a request
 // that has gone quiet is usually bad luck rather than a slow server. Send a
 // second one and keep whichever arrives first.
-private suspend fun hedgedGet(url: String, hedgeAfterMs: Long = 3000L): String = coroutineScope {
+suspend fun hedgedGet(url: String, hedgeAfterMs: Long = 3000L): String = coroutineScope {
     val first = async { app.get(url, timeout = 25L).text }
     select {
         first.onAwait { it }
@@ -103,7 +103,51 @@ private suspend fun hedgedGet(url: String, hedgeAfterMs: Long = 3000L): String =
     }
 }
 
-open class VCloud : ExtractorApi() {
+// playdrive hides the HLS master behind base64+XOR, but publishes the key in
+// the page. Read the key rather than hardcoding it, so a key rotation does not
+// break us — only a change of scheme would.
+suspend fun resolvePlayDrive(embedUrl: String, callback: (ExtractorLink) -> Unit) {
+    val html = try { hedgedGet(embedUrl) } catch (e: Exception) { return }
+    val key = Regex("__PA_SEAL_KEY__\\s*=\\s*\"([^\"]+)\"").find(html)?.groupValues?.get(1) ?: return
+    val sealed = Regex("\"video_url\"\\s*:\\s*\"(pa!~[^\"]+)\"").find(html)?.groupValues?.get(1) ?: return
+    val master = unseal(sealed, key)?.takeIf { it.startsWith("http") } ?: return
+
+    // Audio is a separate rendition group in the master, so pointing the player
+    // at an individual variant would give silent video. Keep the adaptive
+    // master and label it with its best resolution instead.
+    val best = try {
+        Regex("RESOLUTION=\\d+x(\\d+)")
+            .findAll(app.get(master, referer = embedUrl, timeout = 15L).text)
+            .mapNotNull { it.groupValues[1].toIntOrNull() }
+            .maxOrNull()
+    } catch (e: Exception) {
+        null
+    }
+
+    callback(
+        newExtractorLink(
+            "PlayDrive",
+            "PlayDrive ${best?.let { "${it}p" } ?: "[HLS]"} Auto",
+            master,
+            ExtractorLinkType.M3U8
+        ) {
+            this.referer = embedUrl
+            this.quality = best ?: Qualities.Unknown.value
+        }
+    )
+}
+
+private fun unseal(sealed: String, key: String): String? = try {
+    val raw = android.util.Base64.decode(
+        sealed.removePrefix("pa!~"),
+        android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
+    )
+    String(ByteArray(raw.size) { (raw[it].toInt() xor key[it % key.length].code).toByte() })
+} catch (e: Exception) {
+    null
+}
+
+open class VCloud(private val labelHint: String? = null) : ExtractorApi() {
     override val name: String = "V-Cloud"
     override val mainUrl: String = "https://vcloud.*"
     override val requiresReferer = false
@@ -167,9 +211,13 @@ open class VCloud : ExtractorApi() {
         if(!link.startsWith("https://")) link = baseUrl + link
 
         val document = Jsoup.parse(hedgedGet(link), baseUrl)
-        val header = document.select("div.card-header").text()
+        val rawHeader = document.select("div.card-header").text()
         val size = document.select("i#size").text()
-        val quality = getIndexQuality(header)
+        // The vcloud page often has no usable quality; the movie page heading does.
+        val header = rawHeader.ifBlank { labelHint.orEmpty() }
+        val quality = getIndexQuality(rawHeader)
+            .takeIf { it != Qualities.Unknown.value }
+            ?: getIndexQuality(labelHint)
 
         suspend fun myCallback( link: String, server: String = "") {
             emit(
